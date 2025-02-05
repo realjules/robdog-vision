@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Robot Vision Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .video-container {
+            flex: 1;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .command-container {
+            flex: 1;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #videoElement {
+            width: 100%;
+            max-width: 640px;
+            border-radius: 5px;
+        }
+        #commandOutput {
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+            font-family: monospace;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #e8f5e9;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .visualization {
+            margin-top: 20px;
+            canvas {
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Robot Vision Demo</h1>
+    <div class="container">
+        <div class="video-container">
+            <h2>Camera Feed</h2>
+            <video id="videoElement" autoplay></video>
+            <div class="controls">
+                <button onclick="toggleProcessing()">Start/Stop Processing</button>
+            </div>
+            <div class="status" id="status">Status: Waiting to start...</div>
+        </div>
+        <div class="command-container">
+            <h2>Robot Commands</h2>
+            <pre id="commandOutput"></pre>
+            <div class="visualization">
+                <canvas id="robotVis" width="300" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let isProcessing = false;
+        let videoElement = document.getElementById('videoElement');
+        let canvas = document.createElement('canvas');
+        let context = canvas.getContext('2d');
+        let statusElement = document.getElementById('status');
+        let commandOutput = document.getElementById('commandOutput');
+        let robotVis = document.getElementById('robotVis');
+        let robotCtx = robotVis.getContext('2d');
+
+        // Set up video stream
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                videoElement.srcObject = stream;
+            })
+            .catch(function(err) {
+                console.log("Error: " + err);
+            });
+
+        function toggleProcessing() {
+            if (!isProcessing) {
+                startProcessing();
+            } else {
+                stopProcessing();
+            }
+        }
+
+        function startProcessing() {
+            isProcessing = true;
+            statusElement.textContent = "Status: Connected";
+            ws = new WebSocket('ws://' + window.location.host + '/ws');
+            
+            ws.onmessage = function(event) {
+                const command = JSON.parse(event.data);
+                displayCommand(command);
+                visualizeCommand(command);
+            };
+            
+            ws.onclose = function() {
+                stopProcessing();
+            };
+            
+            // Start sending frames
+            sendFrames();
+        }
+
+        function stopProcessing() {
+            isProcessing = false;
+            statusElement.textContent = "Status: Stopped";
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendFrames() {
+            if (!isProcessing) return;
+
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            
+            // Send frame to server
+            canvas.toBlob(function(blob) {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(reader.result);
+                        setTimeout(sendFrames, 200); // Send frame every 200ms
+                    }
+                };
+                reader.readAsDataURL(blob);
+            }, 'image/jpeg');
+        }
+
+        function displayCommand(command) {
+            commandOutput.textContent = JSON.stringify(command, null, 2);
+        }
+
+        function visualizeCommand(command) {
+            const ctx = robotCtx;
+            const width = robotVis.width;
+            const height = robotVis.height;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw robot base
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
+            ctx.fillStyle = '#4CAF50';
+            ctx.fill();
+            
+            // Draw direction arrow
+            const vel = command.velocity_command;
+            const arrowLength = 50 * Math.abs(vel.linear_velocity_mps);
+            const angle = vel.angular_velocity_radps;
+            
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + arrowLength * Math.cos(angle),
+                centerY + arrowLength * Math.sin(angle)
+            );
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Draw gait mode
+            ctx.fillStyle = '#000';
+            ctx.font = '14px Arial';
+            ctx.fillText(command.gait_mode, 10, 20);
+        }
+    </script>
+</body>
+</html>
