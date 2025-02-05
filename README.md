@@ -30,7 +30,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-2. Open your web browser to `http://localhost:8000`
+2. Open your web browser to `http://localhost:50232/`
 
 3. Allow camera access when prompted
 
