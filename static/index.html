@@ -109,6 +109,15 @@
             })
             .catch(function(err) {
                 console.log("Error: " + err);
+                // Create a dummy video stream with a black frame
+                canvas.width = 640;
+                canvas.height = 480;
+                context.fillStyle = '#000';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    videoElement.src = url;
+                }, 'image/jpeg');
             });
 
         function toggleProcessing() {
@@ -120,6 +129,7 @@
         }
 
         function startProcessing() {
+<<<<<<< HEAD
             isProcessing = true;
             statusElement.textContent = "Status: Connecting...";
             console.log("Connecting to WebSocket...");
@@ -149,6 +159,64 @@
             
             // Start sending frames
             sendFrames();
+=======
+            try {
+                isProcessing = true;
+                statusElement.textContent = "Status: Connecting...";
+                console.log('Connecting to WebSocket...');
+                
+                // Create WebSocket connection
+                const wsUrl = 'ws://' + window.location.host + '/ws';
+                console.log('WebSocket URL:', wsUrl);
+                ws = new WebSocket(wsUrl);
+                
+                // Set up WebSocket event handlers
+                ws.onopen = function(event) {
+                    console.log('WebSocket connection established:', event);
+                    statusElement.textContent = "Status: Connected";
+                    
+                    // Start sending frames only after connection is established
+                    try {
+                        sendFrames();
+                    } catch (error) {
+                        console.error('Error starting frame sending:', error);
+                        stopProcessing();
+                    }
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        console.log('Received message:', event.data);
+                        const command = JSON.parse(event.data);
+                        displayCommand(command);
+                        visualizeCommand(command);
+                    } catch (error) {
+                        console.error('Error processing message:', error);
+                        stopProcessing();
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    console.log('WebSocket connection closed:', {
+                        code: event.code,
+                        reason: event.reason,
+                        wasClean: event.wasClean
+                    });
+                    statusElement.textContent = "Status: Disconnected";
+                    stopProcessing();
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    statusElement.textContent = "Status: Error - Connection failed";
+                    stopProcessing();
+                };
+            } catch (error) {
+                console.error('Error starting processing:', error);
+                statusElement.textContent = "Status: Error - " + error.message;
+                stopProcessing();
+            }
+>>>>>>> 52b80befa3b850ff882f9e557af4f83c970e40b7
         }
 
         function stopProcessing() {
@@ -162,6 +230,7 @@
         function sendFrames() {
             if (!isProcessing) return;
 
+<<<<<<< HEAD
             try {
                 if (!videoElement.videoWidth) {
                     console.log("Video not ready yet, retrying in 500ms...");
@@ -191,12 +260,56 @@
                     reader.onerror = function(error) {
                         console.error("Error reading blob:", error);
                         setTimeout(sendFrames, 500);
+=======
+            if (videoElement.srcObject) {
+                // Real camera feed
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            } else {
+                // Dummy image
+                canvas.width = 640;
+                canvas.height = 480;
+                context.fillStyle = '#000';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = '#fff';
+                context.font = '30px Arial';
+                context.fillText('No camera available', 200, 240);
+            }
+            
+            // Send frame to server
+            try {
+                canvas.toBlob(function(blob) {
+                    const reader = new FileReader();
+                    reader.onloadend = function() {
+                        try {
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(reader.result);
+                                setTimeout(sendFrames, 200); // Send frame every 200ms
+                            } else {
+                                console.error('WebSocket not ready:', ws ? ws.readyState : 'undefined');
+                                stopProcessing();
+                            }
+                        } catch (error) {
+                            console.error('Error sending frame:', error);
+                            stopProcessing();
+                        }
+                    };
+                    reader.onerror = function(error) {
+                        console.error('Error reading blob:', error);
+                        stopProcessing();
+>>>>>>> 52b80befa3b850ff882f9e557af4f83c970e40b7
                     };
                     reader.readAsDataURL(blob);
                 }, 'image/jpeg', 0.8);
             } catch (error) {
+<<<<<<< HEAD
                 console.error("Error in sendFrames:", error);
                 setTimeout(sendFrames, 500);
+=======
+                console.error('Error creating blob:', error);
+                stopProcessing();
+>>>>>>> 52b80befa3b850ff882f9e557af4f83c970e40b7
             }
         }
 

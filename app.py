@@ -2,6 +2,7 @@ import cv2
 import torch
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from starlette.websockets import WebSocketState
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -126,70 +127,80 @@ async def get_index():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    logger.info("New WebSocket connection")
-    await websocket.accept()
-    logger.info("WebSocket connection accepted")
+    client_info = f"{websocket.client.host}:{websocket.client.port}"
+    logger.info("New WebSocket connection from %s", client_info)
+    try:
+        await websocket.accept()
+        logger.info("WebSocket connection accepted for %s", client_info)
+    except Exception as e:
+        logger.error(f"Error accepting WebSocket connection from {client_info}: {str(e)}")
+        return
     
-    while True:
-        try:
-            # Receive base64 image from client
-            logger.info("Waiting for image data...")
-            data = await websocket.receive_text()
-            logger.info("Received image data")
-            
-            # Decode base64 image
+    try:
+        while True:
             try:
-                image_data = base64.b64decode(data.split(',')[1])
-                logger.info("Base64 image decoded")
-            except Exception as e:
-                logger.error(f"Error decoding base64 image: {str(e)}")
-                continue
-            
-            # Convert to CV2 image
-            try:
-                nparr = np.frombuffer(image_data, np.uint8)
-                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                if image is None:
-                    logger.error("Failed to decode image")
-                    continue
-                logger.info("Image converted to CV2 format")
-            except Exception as e:
-                logger.error(f"Error converting image: {str(e)}")
-                continue
-            
-            # Process image
-            try:
-                command = vision_system.process_image(image)
-                logger.info(f"Generated command: {command}")
-            except Exception as e:
-                logger.error(f"Error processing image: {str(e)}")
-                continue
-            
-            # Send response
-            try:
-                await websocket.send_json(command)
-                logger.info("Command sent to client")
-            except Exception as e:
-                logger.error(f"Error sending command: {str(e)}")
-                break
+                # Receive base64 image from client
+                logger.info("Waiting for image data from %s...", client_info)
+                data = await websocket.receive_text()
+                logger.info(f"Received image data from {client_info}: {data[:100]}...")
                 
-        except WebSocketDisconnect:
-            logger.info("WebSocket disconnected")
-            break
-        except Exception as e:
-            logger.error(f"Error in main WebSocket loop: {str(e)}")
-            break
-    
-    logger.info("WebSocket connection closed")
+                # Decode base64 image
+                try:
+                    image_data = base64.b64decode(data.split(',')[1])
+                    logger.info("Base64 image decoded from %s", client_info)
+                except Exception as e:
+                    logger.error(f"Error decoding base64 image from {client_info}: {str(e)}")
+                    continue
+                
+                # Convert to CV2 image
+                try:
+                    nparr = np.frombuffer(image_data, np.uint8)
+                    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    if image is None:
+                        logger.error(f"Failed to decode image from {client_info}")
+                        continue
+                    logger.info("Image converted to CV2 format from %s", client_info)
+                except Exception as e:
+                    logger.error(f"Error converting image from {client_info}: {str(e)}")
+                    continue
+                
+                # Process image
+                try:
+                    command = vision_system.process_image(image)
+                    logger.info(f"Generated command for {client_info}: {command}")
+                except Exception as e:
+                    logger.error(f"Error processing image from {client_info}: {str(e)}")
+                    continue
+                
+                # Send response
+                try:
+                    await websocket.send_json(command)
+                    logger.info("Command sent to client %s", client_info)
+                except WebSocketDisconnect:
+                    logger.info("WebSocket disconnected while sending command to %s", client_info)
+                    break
+                except Exception as e:
+                    logger.error(f"Error sending command to {client_info}: {str(e)}")
+                    logger.exception(e)
+                    break
+                    
+            except WebSocketDisconnect:
+                logger.info("WebSocket disconnected from %s", client_info)
+                break
+            except Exception as e:
+                logger.error(f"Error in main WebSocket loop for {client_info}: {str(e)}")
+                break
+    finally:
+        logger.info("WebSocket connection closed for %s", client_info)
 
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting server...")
-    print("\nServer running at: http://localhost:54375")
+    print("\nServer running at: http://localhost:52554")
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
-        port=54375,
+        port=52554,
         access_log=True,
         log_level="info",
         reload=True
