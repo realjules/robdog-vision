@@ -121,17 +121,30 @@
 
         function startProcessing() {
             isProcessing = true;
-            statusElement.textContent = "Status: Connected";
+            statusElement.textContent = "Status: Connecting...";
+            console.log("Connecting to WebSocket...");
             ws = new WebSocket('ws://' + window.location.host + '/ws');
             
+            ws.onopen = function() {
+                console.log("WebSocket connected");
+                statusElement.textContent = "Status: Connected";
+            };
+            
             ws.onmessage = function(event) {
+                console.log("Received command:", event.data);
                 const command = JSON.parse(event.data);
                 displayCommand(command);
                 visualizeCommand(command);
             };
             
             ws.onclose = function() {
+                console.log("WebSocket closed");
                 stopProcessing();
+            };
+
+            ws.onerror = function(error) {
+                console.error("WebSocket error:", error);
+                statusElement.textContent = "Status: Error - Check console";
             };
             
             // Start sending frames
@@ -149,21 +162,42 @@
         function sendFrames() {
             if (!isProcessing) return;
 
-            canvas.width = videoElement.videoWidth;
-            canvas.height = videoElement.videoHeight;
-            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-            
-            // Send frame to server
-            canvas.toBlob(function(blob) {
-                const reader = new FileReader();
-                reader.onloadend = function() {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(reader.result);
-                        setTimeout(sendFrames, 200); // Send frame every 200ms
-                    }
-                };
-                reader.readAsDataURL(blob);
-            }, 'image/jpeg');
+            try {
+                if (!videoElement.videoWidth) {
+                    console.log("Video not ready yet, retrying in 500ms...");
+                    setTimeout(sendFrames, 500);
+                    return;
+                }
+
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                console.log("Frame captured, size:", canvas.width, "x", canvas.height);
+                
+                // Send frame to server
+                canvas.toBlob(function(blob) {
+                    console.log("Frame converted to blob, size:", blob.size, "bytes");
+                    const reader = new FileReader();
+                    reader.onloadend = function() {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            console.log("Sending frame to server...");
+                            ws.send(reader.result);
+                            setTimeout(sendFrames, 200); // Send frame every 200ms
+                        } else {
+                            console.log("WebSocket not ready, state:", ws ? ws.readyState : "undefined");
+                            setTimeout(sendFrames, 500);
+                        }
+                    };
+                    reader.onerror = function(error) {
+                        console.error("Error reading blob:", error);
+                        setTimeout(sendFrames, 500);
+                    };
+                    reader.readAsDataURL(blob);
+                }, 'image/jpeg', 0.8);
+            } catch (error) {
+                console.error("Error in sendFrames:", error);
+                setTimeout(sendFrames, 500);
+            }
         }
 
         function displayCommand(command) {
