@@ -129,37 +129,6 @@
         }
 
         function startProcessing() {
-<<<<<<< HEAD
-            isProcessing = true;
-            statusElement.textContent = "Status: Connecting...";
-            console.log("Connecting to WebSocket...");
-            ws = new WebSocket('ws://' + window.location.host + '/ws');
-            
-            ws.onopen = function() {
-                console.log("WebSocket connected");
-                statusElement.textContent = "Status: Connected";
-            };
-            
-            ws.onmessage = function(event) {
-                console.log("Received command:", event.data);
-                const command = JSON.parse(event.data);
-                displayCommand(command);
-                visualizeCommand(command);
-            };
-            
-            ws.onclose = function() {
-                console.log("WebSocket closed");
-                stopProcessing();
-            };
-
-            ws.onerror = function(error) {
-                console.error("WebSocket error:", error);
-                statusElement.textContent = "Status: Error - Check console";
-            };
-            
-            // Start sending frames
-            sendFrames();
-=======
             try {
                 isProcessing = true;
                 statusElement.textContent = "Status: Connecting...";
@@ -216,7 +185,6 @@
                 statusElement.textContent = "Status: Error - " + error.message;
                 stopProcessing();
             }
->>>>>>> 52b80befa3b850ff882f9e557af4f83c970e40b7
         }
 
         function stopProcessing() {
