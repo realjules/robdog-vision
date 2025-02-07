@@ -4,14 +4,29 @@ import numpy as np
 from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 import json
 from datetime import datetime
 from PIL import Image
 import io
 import base64
+import logging
 from transformers import AutoFeatureExtractor, ViTForImageClassification
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -65,9 +80,16 @@ vision_system = RobotVisionSystem()
 
 @app.get("/")
 async def get_index():
-    with open("static/index.html", "r") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
+    try:
+        with open("static/index.html", "r") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content, status_code=200)
+    except FileNotFoundError:
+        print("Error: index.html not found in static directory")
+        return HTMLResponse(content="<h1>Error: Page not found</h1>", status_code=404)
+    except Exception as e:
+        print(f"Error serving index page: {str(e)}")
+        return HTMLResponse(content="<h1>Internal Server Error</h1>", status_code=500)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -95,5 +117,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+    logger.info("Starting server...")
     print("\nServer running at: http://localhost:54375")
-    uvicorn.run(app, host="0.0.0.0", port=54375, access_log=False)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=54375,
+        access_log=True,
+        log_level="info",
+        reload=True
+    )
