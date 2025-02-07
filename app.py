@@ -11,6 +11,7 @@ from PIL import Image
 import io
 import base64
 import logging
+import os
 from transformers import AutoFeatureExtractor, ViTForImageClassification
 
 # Configure logging
@@ -29,7 +30,11 @@ app.add_middleware(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    logger.info("Static files mounted successfully")
+except Exception as e:
+    logger.error(f"Error mounting static files: {str(e)}")
 
 class RobotVisionSystem:
     def __init__(self):
@@ -95,15 +100,29 @@ vision_system = RobotVisionSystem()
 @app.get("/")
 async def get_index():
     try:
-        with open("static/index.html", "r") as f:
+        logger.info("Attempting to read index.html")
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        index_path = os.path.join(current_dir, "static", "index.html")
+        logger.info(f"Looking for index.html at: {index_path}")
+        
+        if not os.path.exists(index_path):
+            logger.error(f"index.html not found at {index_path}")
+            return HTMLResponse(
+                content="<h1>Error: Page not found</h1><p>index.html is missing from static directory</p>",
+                status_code=404
+            )
+        
+        with open(index_path, "r") as f:
             html_content = f.read()
-        return HTMLResponse(content=html_content, status_code=200)
-    except FileNotFoundError:
-        print("Error: index.html not found in static directory")
-        return HTMLResponse(content="<h1>Error: Page not found</h1>", status_code=404)
+            logger.info("Successfully read index.html")
+            return HTMLResponse(content=html_content, status_code=200)
+            
     except Exception as e:
-        print(f"Error serving index page: {str(e)}")
-        return HTMLResponse(content="<h1>Internal Server Error</h1>", status_code=500)
+        logger.error(f"Error serving index page: {str(e)}")
+        return HTMLResponse(
+            content=f"<h1>Internal Server Error</h1><p>Error: {str(e)}</p>",
+            status_code=500
+        )
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
