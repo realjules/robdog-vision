@@ -13,7 +13,7 @@ import io
 import base64
 import logging
 import os
-from transformers import AutoFeatureExtractor, ViTForImageClassification
+# No need for transformers import as we use depth_estimator directly
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,42 +39,44 @@ except Exception as e:
 
 class RobotVisionSystem:
     def __init__(self):
-        # Initialize ViT model
-        self.model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224")
-        self.processor = AutoFeatureExtractor.from_pretrained("google/vit-base-patch16-224")
+        from src.vision.depth_estimator import DepthEstimator
+        self.depth_estimator = DepthEstimator()
+        logger.info("Depth estimation model initialized")
 
     def process_image(self, image, query=None):
         try:
             logger.info("Processing image...")
-            # Convert CV2 image to PIL
+            # Convert CV2 image to PIL if needed
             if isinstance(image, np.ndarray):
                 image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
                 logger.info("Image converted to PIL format")
             
-            # Resize image to match model's expected size (224x224)
-            image = image.resize((224, 224))
-            logger.info("Image resized to 224x224")
+            # Save temporary image for depth estimation
+            temp_path = "temp_image.jpg"
+            image.save(temp_path)
             
-            # Prepare inputs
-            inputs = self.processor(images=image, return_tensors="pt")
-            logger.info("Image processed by ViT processor")
+            # Get depth estimation
+            results = self.depth_estimator.estimate_depth(temp_path)
+            logger.info("Depth estimation completed")
             
-            # Generate prediction
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                logits = outputs.logits
-                predicted_label = logits.argmax(-1).item()
-                logger.info(f"Model prediction: label {predicted_label}")
+            # Generate visualization
+            depth_vis_path = os.path.join("static", "depth_output.png")
+            self.depth_estimator.visualize_depth(results['depth_map'], depth_vis_path)
             
-            # Convert prediction to navigation command
-            if predicted_label in [0, 1, 2]:  # If object detected ahead
+            # Clean up temp file
+            os.remove(temp_path)
+            
+            # Convert depth information to navigation command
+            center_depth = results['object_distances']['center']
+            
+            if center_depth['relative_distance'] == 'near':
                 command = {
                     "velocity_command": {
                         "linear_velocity_mps": 0.0,
                         "angular_velocity_radps": 0.5  # Turn right
                     },
                     "gait_mode": "walking",
-                    "reasoning": "Object detected ahead, turning right to avoid"
+                    "reasoning": f"Object detected ahead at depth {center_depth['mean_depth']:.2f}, turning right to avoid"
                 }
             else:
                 command = {
@@ -83,10 +85,11 @@ class RobotVisionSystem:
                         "angular_velocity_radps": 0.0
                     },
                     "gait_mode": "trotting",
-                    "reasoning": "Path appears clear, moving forward"
+                    "reasoning": f"Path clear ahead, mean depth {center_depth['mean_depth']:.2f}"
                 }
             
-            # Add timestamp
+            # Add depth information and timestamp
+            command['depth_info'] = results
             command['timestamp'] = datetime.utcnow().isoformat() + "Z"
             logger.info(f"Generated command: {command}")
             return command
