@@ -1,17 +1,16 @@
-# Robot Vision Demo Using LLaVA and DepthAnything
+# Robot Vision Demo Using DepthAnything
 
-A simple demonstration of using LLaVA (Large Language and Vision Assistant) and DepthAnything for robot navigation. This demo shows how to process real-time camera feed, estimate depth information, and generate structured navigation commands for a robot.
+A simple demonstration of using DepthAnything for depth-based robot navigation. This demo shows how to process real-time camera feed, estimate depth information, and generate structured navigation commands for a robot based on depth analysis.
 
 ## Features
 
 - Real-time camera feed processing
-- LLaVA-based scene understanding
-- Depth estimation using DepthAnything
-- Region-based depth analysis
+- Depth estimation using DepthAnything model
+- Region-based depth analysis for navigation
 - Object detection based on depth gradients
-- JSON command generation for robot navigation
+- Automatic navigation command generation
 - Web-based visualization interface
-- Real-time command visualization
+- Real-time depth visualization
 
 ## Depth Analysis
 
